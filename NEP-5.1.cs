@@ -23,12 +23,12 @@ namespace Neo.SmartContract
 
                 Symbol: GTA
 
-                Precision: 8to
+                Precision: 8
 
                 Supply: 1,000,000,000
         */
         //Token Settings
-        public static string Name() => "GagapayQwertv11 network token";
+        public static string Name() => "GagaPay3 network token";
         public static string Symbol() => "GTA";
         public static readonly byte[] Owner = "Abdeg1wHpSrfjNzH5edGTabi5jdD9dvncX".ToScriptHash();
         public static byte Decimals() => 8;
@@ -64,20 +64,20 @@ namespace Neo.SmartContract
                 if (operation == "totalSupply") return TotalSupply();
                 if (operation == "name") return Name();
                 if (operation == "symbol") return Symbol();
-                if (operation == "allowance") if (args.Length >= 2) return Allowance((byte[])args[0], (byte[])args[1]); else return 0;
-                if (operation == "approve") if (args.Length >= 3) return Approve((byte[])args[0], (byte[])args[1], (BigInteger)args[2]); else return 0;
-                if (operation == "transferFrom") if (args.Length >= 4) return TransferFrom((byte[])args[0], (byte[])args[1], (byte[])args[2], (BigInteger)args[3]); else return 0;
+                if (operation == "approve") if (args.Length >= 3) return Approve((byte[])args[0], (byte[])args[1], (BigInteger)args[2]); else return NotifyErrorAndReturn0("argument count must be atleast 3");
+                if (operation == "allowance") if (args.Length >= 2) return Allowance((byte[])args[0], (byte[])args[1]); else return NotifyErrorAndReturn0("argument count must be atleast 2");
+                if (operation == "transferFrom") if (args.Length >= 4) return TransferFrom((byte[])args[0], (byte[])args[1], (byte[])args[2], (BigInteger)args[3]); else return NotifyErrorAndReturn0("argument count must be atleast 4");
                 if (operation == "transfer")
                 {
-                    if (args.Length != 3) return false;
+                    if (args.Length != 3 || args[0] == null || ((byte[])args[0]).Length == 0 || args[1] == null || ((byte[])args[1]).Length == 0) return NotifyErrorAndReturnFalse("argument count must be 3 and they must not be null");
                     byte[] from = (byte[])args[0];
                     byte[] to = (byte[])args[1];
                     BigInteger value = (BigInteger)args[2];
-                    return Transfer(from, to, value);
+                    return Transfer(from, to, value, false);
                 }
                 if (operation == "balanceOf")
                 {
-                    if (args.Length != 1) return 0;
+                    if (args.Length != 1 || args[0] == null || ((byte[])args[0]).Length == 0) return NotifyErrorAndReturn0("argument count must be 1 and they must not be null");
                     byte[] account = (byte[])args[0];
                     return BalanceOf(account);
                 }
@@ -116,6 +116,9 @@ namespace Neo.SmartContract
         /// </returns>
         public static BigInteger Allowance(byte[] from, byte[] to)
         {
+            if (from == null || from.Length != 20 || to == null || to.Length != 20)
+                return NotifyErrorAndReturn0("from or to values are empty");
+
             return Storage.Get(Storage.CurrentContext, from.Concat(to)).AsBigInteger();
         }
         /// <summary>
@@ -138,12 +141,16 @@ namespace Neo.SmartContract
         /// </returns>
         public static bool Approve(byte[] originator, byte[] to, BigInteger amount)
         {
-            if (Runtime.CheckWitness(originator) && amount >=0)
-            {
-                Storage.Put(Storage.CurrentContext, originator.Concat(to), amount);
-                return true;
-            }
-            return false;
+            if (originator == null || originator.Length != 20 || to == null || to.Length != 20)
+                return NotifyErrorAndReturnFalse("from or to values are empty");
+
+            if (!(Runtime.CheckWitness(originator) || amount < 0))
+                return NotifyErrorAndReturnFalse("amount ir lower that zero or originator isn't associated with this invoke");
+
+
+            Storage.Put(Storage.CurrentContext, originator.Concat(to), amount);
+            return true;
+
         }
         /// <summary>
         ///   Transfers a balance from one account to another
@@ -166,28 +173,44 @@ namespace Neo.SmartContract
         /// </returns>
         public static bool TransferFrom(byte[] originator, byte[] from, byte[] to, BigInteger amountToSend)
         {
-            if (Runtime.CheckWitness(originator))
-            {
-                BigInteger allowedAmount = Storage.Get(Storage.CurrentContext, from.Concat(originator)).AsBigInteger();
-                BigInteger ownerAmount = Storage.Get(Storage.CurrentContext, from).AsBigInteger();
+            if (!(Runtime.CheckWitness(originator)))
+                return NotifyErrorAndReturnFalse("originator isn't associated with this invoke");
 
-                if (amountToSend >= 0 && ownerAmount >= 0 && allowedAmount >= amountToSend && ownerAmount >= amountToSend)
-                {
-                    BigInteger receiverAmount = Storage.Get(Storage.CurrentContext, to).AsBigInteger();
-                    Storage.Put(Storage.CurrentContext, from.Concat(originator), (allowedAmount - amountToSend));
-                    Storage.Put(Storage.CurrentContext, from, (ownerAmount - amountToSend));
-                    Storage.Put(Storage.CurrentContext, to, (receiverAmount + amountToSend));
-                    Transferred(from, to, amountToSend);
-                    return true;
-                }
+            if (!(amountToSend > 0))
+                return NotifyErrorAndReturnFalse("amount to send must be greater than 0");
+
+            BigInteger ownerAmount = BalanceOf(from);
+
+            if (ownerAmount < 0 || ownerAmount >= amountToSend)
+                return NotifyErrorAndReturnFalse("from wallet ammount needs to be over 0 and equal or greater than amount to send");
+
+            BigInteger allowedAmount = Allowance(from, originator);
+
+            if (allowedAmount < amountToSend)
+                return NotifyErrorAndReturnFalse("amount that is allowed needs to be equal or greater than amount to send");
+
+            if (!(Transfer(from, to, amountToSend, true)))//This does the actual transfer.
+                return NotifyErrorAndReturnFalse("Failed to Transfer");
+
+
+
+            BigInteger amountLeft = allowedAmount - amountToSend;
+            if (amountLeft <= 0)
+            {
+                Storage.Delete(Storage.CurrentContext, from.Concat(originator));
             }
-            return false;
+            else
+            {
+                Storage.Put(Storage.CurrentContext, from.Concat(originator), amountLeft);
+            }
+            return true;
         }
+
         // function that is always called when someone wants to transfer tokens.
-        public static bool Transfer(byte[] from, byte[] to, BigInteger value)
+        public static bool Transfer(byte[] from, byte[] to, BigInteger value, bool transferFrom)
         {
             if (value <= 0) return false;
-            if (!Runtime.CheckWitness(from)) return false;
+            if (!Runtime.CheckWitness(from) && !transferFrom) return false;
             if (from == to) return true;
             BigInteger from_value = Storage.Get(Storage.CurrentContext, from).AsBigInteger();
             if (from_value < value) return false;
@@ -200,12 +223,22 @@ namespace Neo.SmartContract
             Transferred(from, to, value);
             return true;
         }
-
         // get the account balance of another account with address
         public static BigInteger BalanceOf(byte[] address)
         {
             return Storage.Get(Storage.CurrentContext, address).AsBigInteger();
         }
+        public static bool NotifyErrorAndReturnFalse(string value)
+        {
+            Runtime.Notify(value);
+            return false;
+        }
+        public static int NotifyErrorAndReturn0(string value)
+        {
+            Runtime.Notify(value);
+            return 0;
+        }
+
 
     }
 }
