@@ -22,3 +22,5 @@ operation to work)
 
 9."transferFrom" :Is used when Wallet1 wants to send tokens from Wallet2 to Wallet3.
 
+10."transfer" : Used to transfer tokens from Wallet1 to Wallet2.
+
