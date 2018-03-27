@@ -82,7 +82,7 @@ namespace Neo.SmartContract
                     return BalanceOf(account);
                 }
             }
-            return false;
+            return NotifyErrorAndReturnFalse("Operation not found");
         }
 
         /// <summary>
