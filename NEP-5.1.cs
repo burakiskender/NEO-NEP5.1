@@ -1,6 +1,5 @@
 ﻿using Neo.SmartContract.Framework;
 using Neo.SmartContract.Framework.Services.Neo;
-using Neo.SmartContract.Framework.Services.System;
 using System;
 using System.ComponentModel;
 using System.Numerics;
@@ -30,11 +29,12 @@ namespace Neo.SmartContract
         //Token Settings
         public static string Name() => "GagaPay network token";
         public static string Symbol() => "GTA";
-        public static readonly byte[] Owner = "Abdeg1wHpSrfjNzH5edGTabi5jdD9dvncX".ToScriptHash();//translates to: 0x20f0a44d41c659a49651823ac19794dda45bd4d9.
+        public static readonly byte[] Owner = "Abdeg1wHpSrfjNzH5edGTabi5jdD9dvncX".ToScriptHash();//translates 
+        //to: 0x20f0a44d41c659a49651823ac19794dda45bd4d9., it's the ScriptHash of your public address ,you can view it in neo-gui(for example)
         public static byte Decimals() => 8;
         private const ulong factor = 100000000; //decided by Decimals()
-        //Since we don't want to deal with floating points sending 555 tokens with 8 Decimals (100000000) would actually mean that you want to  send 55500000000 tokens.
-        private const ulong neo_decimals = 100000000;
+        //Since we don't want to deal with floating points sending 555 tokens with 8 Decimals (100000000) 
+        //would actually mean that you want to  send 55500000000 tokens.
         private const ulong total_amount = 1000000000 * factor; //token amount
 
         [DisplayName("transfer")]
@@ -127,11 +127,11 @@ namespace Neo.SmartContract
         /// </returns>
         public static BigInteger Allowance(byte[] from, byte[] to)
         {
-            if (to == null || to.Length != 20)
-                return NotifyErrorAndReturn0("To value must not be empty and have size of 20");
-
             if (from == null || from.Length != 20)
                 return NotifyErrorAndReturn0("From value must not be empty and have size of 20");
+
+            if (to == null || to.Length != 20)
+                return NotifyErrorAndReturn0("To value must not be empty and have size of 20");
 
             return Storage.Get(Storage.CurrentContext, from.Concat(to)).AsBigInteger();
         }
@@ -161,10 +161,12 @@ namespace Neo.SmartContract
             if (originator == null || originator.Length != 20)
                 return NotifyErrorAndReturnFalse("Originator value must not be empty and have size of 20");
 
-            if (!(Runtime.CheckWitness(originator)))
-                return NotifyErrorAndReturnFalse("Originator isn't associated with this invoke");
             if (amount < 0)
                 return NotifyErrorAndReturnFalse("Amount is lower than zero");
+
+            if (!(Runtime.CheckWitness(originator)))
+                return NotifyErrorAndReturnFalse("Originator isn't associated with this invoke");
+
 
             Storage.Put(Storage.CurrentContext, originator.Concat(to), amount);
             return true;
@@ -191,6 +193,14 @@ namespace Neo.SmartContract
         /// </returns>
         public static bool TransferFrom(byte[] originator, byte[] from, byte[] to, BigInteger amountToSend)
         {
+
+            if (originator == null || originator.Length != 20)
+                return NotifyErrorAndReturnFalse("Originator value must not be empty and have size of 20");
+            if (from == null || from.Length != 20)
+                return NotifyErrorAndReturnFalse("From value must not be empty and have size of 20");
+            if (to == null || to.Length != 20)
+                return NotifyErrorAndReturnFalse("To value must not be empty and have size of 20");
+
             if (!(Runtime.CheckWitness(originator)))
                 return NotifyErrorAndReturnFalse("Originator isn't associated with this invoke");
 
@@ -242,11 +252,17 @@ namespace Neo.SmartContract
         /// </returns>
         public static bool Transfer(byte[] from, byte[] to, BigInteger value, bool transferFrom)
         {
-            if (value <= 0) return false;
+            if (to == null || to.Length != 20)
+                return NotifyErrorAndReturnFalse("To value must not be empty and have size of 20");
+
+            if (from == null || from.Length != 20)
+                return NotifyErrorAndReturnFalse("From value must not be empty and have size of 20");
+
+            if (value <= 0) return NotifyErrorAndReturnFalse("Try to send more than 0 tokens");
             if (!transferFrom && !Runtime.CheckWitness(from)) return NotifyErrorAndReturnFalse("Owner of the wallet is not involved in this invoke");
             if (from == to) return true;
             BigInteger from_value = Storage.Get(Storage.CurrentContext, from).AsBigInteger();
-            if (from_value < value) return NotifyErrorAndReturnFalse("Insufficient funds"); ;
+            if (from_value < value) return NotifyErrorAndReturnFalse("Insufficient funds");
             if (from_value == value)
                 Storage.Delete(Storage.CurrentContext, from);
             else
