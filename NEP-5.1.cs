@@ -9,26 +9,9 @@ namespace Neo.SmartContract
     public class ICO_Template : Framework.SmartContract
     {
 
-        /*
-                Name: Gagapay network token
-
-                Version: 1.0
-
-                Author: Gagapay Limited
-
-                Email: info@gagapay.com
-
-                Description: Gagapay network token
-
-                Symbol: GTA
-
-                Precision: 8
-
-                Supply: 1,000,000,000
-        */
         //Token Settings
-        public static string Name() => "GagaPay network token";
-        public static string Symbol() => "GTA";
+        public static string Name() => "token";
+        public static string Symbol() => "TKA";
         public static readonly byte[] Owner = "Abdeg1wHpSrfjNzH5edGTabi5jdD9dvncX".ToScriptHash();//translates 
         //to: 0x20f0a44d41c659a49651823ac19794dda45bd4d9., it's the ScriptHash of your public address ,you can view it in neo-gui(for example)
         public static byte Decimals() => 8;
